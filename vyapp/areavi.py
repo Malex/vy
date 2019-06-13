@@ -3,7 +3,6 @@
 """
 
 from tkinter import *
-from re import escape
 import string
 import os
 
@@ -65,8 +64,6 @@ class AreaVi(Text, DataEvent, IdleEvent):
         self.filename = default_filename
 
         self.mark_set('(CURSOR_LAST_COL)', '1.0')
-        self.mark_set('(RANGE_SEL_MARK)', '1.0')
-        self.mark_set('(BLOCK_SEL_MARK)', '1.0')
 
         # def cave(event):
             # AreaVi.ACTIVE = event.widget
@@ -78,9 +75,21 @@ class AreaVi(Text, DataEvent, IdleEvent):
         self.project  = ''
         self.assoc_c  = 0
 
+        # The character used for indentation.
+        self.tabchar = ' '
+        self.tabsize = 4
+
         def set_input(e):
             AreaVi.INPUT = e.widget
         self.hook('AreaVi', '-1', '<FocusIn>', set_input)
+
+    def settab(self, tabsize, tabchar):
+        self.tabchar = tabchar
+        self.tabsize = tabsize
+
+    def indent(self):
+        self.edit_separator()
+        self.insert('insert', self.tabchar * self.tabsize)
 
     def update_map(self, namespace, map):
         scheme = self.map.setdefault(namespace, {})
@@ -236,12 +245,6 @@ class AreaVi(Text, DataEvent, IdleEvent):
             self.tag_remove(ind, '1.0', 'end')
         self.db.clear()
 
-    def curline(self):
-        """
-        This method returns the string that corresponds to the cursor line.
-        """
-        return self.get('insert linestart', 'insert +1l linestart')
-
     def tags_config(self, config):
         for indi, indj in config.items():
             self.tag_config(indi, **indj)
@@ -274,24 +277,7 @@ class AreaVi(Text, DataEvent, IdleEvent):
         for indi, indj in args:
             self.tag_add(name, indi, indj)
 
-    def insee(self, index, data):
-        """
-        This method inserts data at index position then makes the cursor visible.
-        """
-
-        self.insert(index, data)
-        self.see('insert')
-
-    def cmd_like(self):
-        """
-        This method retrieves the cursor line then deletes it afterwards.
-        """
-
-        data = self.get('insert linestart', 'insert lineend')
-        self.delete('insert linestart', 'insert lineend')
-        return data
-
-    def indref(self, index):
+    def indref(self, index='insert'):
         """
         This is a short hand function. It is used to convert a Text index
         into two integers like:
@@ -345,33 +331,18 @@ class AreaVi(Text, DataEvent, IdleEvent):
         self.mark_set('insert', index)
         self.see('insert')
 
-    def is_end(self):
-        """
-        This function returns True if the cursor is positioned
-        at the end of the AreaVi instance.
-        """
-
-        # I have to use 'end -1l linestart' since it seems the 'end' tag
-        # corresponds to a one line after the last visible line.
-        # So last line lineend != 'end'.
-
-        return self.compare('insert linestart', '!=', 'end -1l linestart')
-
-    def is_start(self):
-        """
-        This function returns True if the cursor is
-        at the start of the text region. It is on index '1.0'
-        """
-
-        return self.compare('insert linestart', '!=', '1.0')
 
     def down(self):
         """  
         It sets the cursor position one line down.  
         """
 
-        if not self.is_end():
-            return
+        # I have to use 'end -1l linestart' since it seems the 'end' tag
+        # corresponds to a one line after the last visible line.
+        # So last line lineend != 'end'.
+
+        is_end = self.compare('insert linestart', '!=', 'end -1l linestart')
+        if not is_end: return
 
         a, b = self.indref('(CURSOR_LAST_COL)')
         c, d = self.indcur()
@@ -382,9 +353,9 @@ class AreaVi(Text, DataEvent, IdleEvent):
         It sets the cursor one line up.  
         """
 
-        if not self.is_start():
-            return
+        is_start = self.compare('insert linestart', '!=', '1.0')
 
+        if not is_start: return
         a, b = self.indref('(CURSOR_LAST_COL)')
         c, d = self.indcur()
         self.setcur(c - 1, b)
@@ -409,20 +380,6 @@ class AreaVi(Text, DataEvent, IdleEvent):
         # The mark used by self.down, self.up.
         self.mark_set('(CURSOR_LAST_COL)', 'insert')
     
-    def start_selection(self):
-        """  
-        Start range selection.
-        """
-
-        self.mark_set('(RANGE_SEL_MARK)', 'insert')
-    
-    def start_block_selection(self):
-        """
-        Start block selection.
-        """
-
-        self.mark_set('(BLOCK_SEL_MARK)', 'insert')
-
     def rmsel(self, index0, index1):
         """
         It removes the tag sel from the range that is delimited by index0 and index1
@@ -466,155 +423,6 @@ class AreaVi(Text, DataEvent, IdleEvent):
         else:
             return index0
 
-    def sel_up(self):
-        """
-        It adds 'sel' one line up the 'insert' position
-        and sets the cursor one line up.
-        """
-
-        self.rmsel('(RANGE_SEL_MARK)', 'insert')
-        self.up()
-        self.addsel('(RANGE_SEL_MARK)', 'insert')
-
-    def sel_down(self):
-        """ 
-        It adds or removes selection one line down. 
-        """
-
-        self.rmsel('(RANGE_SEL_MARK)', 'insert')
-        self.down()
-        self.addsel('(RANGE_SEL_MARK)', 'insert')
-    
-    def sel_right(self):
-        """ 
-        It adds or removes selection one character right.
-        """
-
-
-        self.rmsel('(RANGE_SEL_MARK)', 'insert')
-        self.right()
-        self.addsel('(RANGE_SEL_MARK)', 'insert')
-    
-    def sel_left(self):
-        """ 
-        It adds or removes selection one character left.
-        """
-
-        self.rmsel('(RANGE_SEL_MARK)', 'insert')
-        self.left()
-        self.addsel('(RANGE_SEL_MARK)', 'insert')
-
-    def addblock(self, index0, index1):
-        """
-        It adds block selection from index0 to index1.
-        """
-
-        index2 = self.min(index0, index1)
-        index3 = self.max(index0, index1)
-
-        a, b   = self.indint(index2)
-        c, d   = self.indint(index3)
-
-        for ind in range(a, c + 1):
-            self.addsel('%s.%s' % (ind, min(b, d)), '%s.%s' % (ind, max(b, d)))
-
-    def rmblock(self, index0, index1):
-        """
-        It removes block selection from index0 to index1.
-        """
-
-        index2 = self.min(index0, index1)
-        index3 = self.max(index0, index1)
-
-        a, b   = self.indint(index2)
-        c, d   = self.indint(index3)
-
-        for ind in range(a, c + 1):
-            self.rmsel('%s.%s' % (ind, min(b, d)),  '%s.%s' % (ind, max(b, d)))
-
-    def block_down(self):
-        """  
-        It adds or removes block selection one line down.  
-        """
-
-        a, b  = self.indref('(CURSOR_LAST_COL)')
-        c, d  = self.indcur()
-
-        index = self.index('(BLOCK_SEL_MARK)')
-        self.rmblock(index, '%s.%s' % (c, b))
-        self.down()
-
-        a, b   = self.indref('(CURSOR_LAST_COL)')
-        c, d = self.indcur()
-
-        self.addblock(index, '%s.%s' % (c, b))
-
-    def block_up(self):
-        """  
-        It adds or removes block selection one line up.  
-        """
-
-        a, b   = self.indref('(CURSOR_LAST_COL)')
-        c, d   = self.indcur()
-        index  = self.index('(BLOCK_SEL_MARK)')
-
-        self.rmblock(index, '%s.%s' % (c, b))
-        self.up()
-
-        a, b = self.indref('(CURSOR_LAST_COL)')
-        c, d = self.indcur()
-
-        self.addblock(index, '%s.%s' % (c, b))
-
-    def is_line_start(self):
-        """
-        It returns True if the cursor is at the start of the cursor line.
-        """
-
-        return self.compare('insert', '!=', 'insert linestart')
-
-    def block_left(self):
-        """
-        It adds block selection to the left.
-        """
-
-        a, b   = self.indref('(CURSOR_LAST_COL)')
-        c, d   = self.indcur()
-
-        index = self.index('(BLOCK_SEL_MARK)')
-        self.rmblock(index, '%s.%s' % (c, b))
-        self.left()
-
-        a, b   = self.indref('(CURSOR_LAST_COL)')
-        c, d = self.indcur()
-
-        self.addblock(index, '%s.%s' % (c, b))
-
-    def is_line_end(self):
-        """
-        It returns True if the cursor is at the end of the cursor line.
-        """
-
-        return self.compare('insert', '!=', 'insert lineend')
-
-    def block_right(self):
-        """
-        It adds/removes block selection to the right.
-        """
-
-        a, b   = self.indref('(CURSOR_LAST_COL)')
-        c, d   = self.indcur()
-
-        index = self.index('(BLOCK_SEL_MARK)')
-        self.rmblock(index, '%s.%s' % (c, b))
-        self.right()
-
-        a, b   = self.indref('(CURSOR_LAST_COL)')
-        c, d = self.indcur()
-
-        self.addblock(index, '%s.%s' % (c, b))
-
-                
     def clear_selection(self):
         """
         Unselect all text.
@@ -624,156 +432,6 @@ class AreaVi(Text, DataEvent, IdleEvent):
             self.tag_remove('sel', 'sel.first', 'sel.last')
         except Exception:
             pass
-
-    def del_char(self):
-        """
-        It deletes a char from the cursor position.
-        """
-
-        self.edit_separator()
-        self.delete('insert', 'insert +1c')
-
-    def echo(self, data):
-        self.insert('insert', data)
-
-    def backspace(self):
-        """
-        """
-
-        self.delete('insert -1c', 'insert')
-
-    def do_undo(self):
-        """
-        It does undo.
-        """
-
-        try:
-            self.edit_undo()
-        except TclError:
-            pass
-    
-    def do_redo(self):
-        """
-        It redoes.
-        """
-
-        try:
-            self.edit_redo()
-        except TclError:
-            pass
-
-    def sel_text_start(self):
-        """
-        It selects all text from cursor position to the start position
-        of the text.
-
-        """
-
-        index = self.index('insert')
-        self.go_text_start()
-        self.addsel(index, 'insert')
-
-    def sel_text_end(self):
-        """
-        It selects all text from the cursor position to the end of the text.
-        """
-
-        index = self.index('insert')
-        self.go_text_end()
-        self.addsel(index, 'insert')
-
-    def go_text_start(self):
-        """
-        Place the cursor at the beginning of the file.
-        """
-
-        self.mark_set('insert', '1.0')
-        self.see('insert')
-    
-    def go_text_end(self):
-        """
-        Place the cursor at the end of the file.
-        """
-
-        self.mark_set('insert', 'end linestart')
-        self.see('insert')
-    
-    def sel_line_start(self):
-        """
-        It adds selection from the cursor position to the 
-        start of the line.
-        """
-
-        index = self.index('insert')
-        self.go_line_start()
-        self.addsel(index, 'insert')
-
-    def sel_line_end(self):
-        """
-        It selects all text from the cursor position to the end of the line.
-        """
-
-        index = self.index('insert')
-        self.go_line_end()
-        self.addsel(index, 'insert')
-
-    def go_line_start(self):
-        """
-        Place the cursor at the beginning of the line.
-        """
-
-        self.mark_set('insert', 'insert linestart')
-        
-
-    def go_line_end(self):
-        """
-        Place the cursor at the end of the line.
-        """
-
-        self.mark_set('insert', 'insert lineend')
-
-    def go_next_word(self):
-        """
-        Place the cursor at the next word.
-        """
-
-        self.iseek('\M', index='insert', stopindex='end')
-
-    def go_prev_word(self):
-        """
-        Place the cursor at the previous word.
-        """
-
-        self.iseek('\M', backwards=True, index='insert', stopindex='1.0')
-
-    def go_next_sym(self, chars):
-        """
-        Place the cursor at the next occurrence of one of the chars.
-        """
-
-        chars = [escape(ind) for ind in chars]
-        REG   = '|'.join(chars)
-        self.iseek(REG, index='insert', stopindex='end')
-
-    def go_prev_sym(self, chars):
-        """
-        Place the cursor at the previous occurrence of one of the chars.
-        """
-
-        chars = [escape(ind) for ind in chars]
-        REG   = '|'.join(chars)
-        self.iseek(REG,  backwards=True, stopindex='1.0')
-    
-    def del_line(self):
-        """
-        It deletes the cursor line, makes the cursor visible
-        and adds a separator to the undo stack.
-        """
-
-        self.edit_separator()
-        self.delete('insert linestart', 'insert +1l linestart')
-        self.see('insert')
-    
 
     def cpsel(self, sep=''):
         """
@@ -795,76 +453,7 @@ class AreaVi(Text, DataEvent, IdleEvent):
         self.clipboard_clear()
         self.clipboard_append(data)
         self.edit_separator()
-        self.delete_ranges('sel')
-
-
-    def del_sel(self):
-        """
-        It deletes all selected text.
-        """
-        self.edit_separator()
-        self.delete_ranges('sel')
-    
-
-    def ptsel(self):
-        """
-        Paste text at the cursor position.
-        """
-
-        data = self.clipboard_get()
-        self.edit_separator()
-        self.insert('insert', data)
-    
-
-    def ptsel_after(self):
-        """
-        Paste text one line down the cursor position.
-        """
-
-        data = self.clipboard_get()
-        self.edit_separator()
-        self.insert('insert +1l linestart', data)
-
-
-    def ptsel_before(self):
-        """
-        Paste text one line up the cursor position.
-        """
-
-        data = self.clipboard_get()
-        self.edit_separator()
-        self.insert('insert linestart', data)
-
-
-    def select_line(self):
-        """
-        It adds selection to the cursor line.
-        """
-
-        self.tag_add('sel', 'insert linestart', 'insert +1l linestart')
-
-    def unselect_line(self):
-        """
-        It removes selection from the cursor line.
-        """
-
-        self.tag_remove('sel', 'insert linestart', 'insert +1l linestart')
-
-
-    def toggle_line_selection(self):
-        """
-        Toggle line selection.
-        """
-
-        self.toggle_sel('insert linestart', 'insert +1l linestart')
-
-    def toggle_sel(self, index0, index1):
-        """
-        Toggle selection in the range defined by index0 and index1.
-        """
-
-        self.toggle_range('sel', index0, index1)
-
+        self.swap_ranges('sel', '', '1.0', 'end')
 
     def toggle_range(self, name, index0, index1):
         """
@@ -883,133 +472,25 @@ class AreaVi(Text, DataEvent, IdleEvent):
         else:
             self.tag_add(name, index0, index1)
 
-    def select_word(self, index='insert'):
-        """
-        Select the closest word from the cursor.
-        """
-
-        index1, index2 = self.get_word_range(index)
-        self.tag_add('sel', index1, index2)
-    
-    def get_word_range(self, index):
+    def get_word_range(self, index='insert'):
         index1 = self.search('\W', index, regexp=True, stopindex='%s linestart' % index, backwards=True)
         index2 = self.search('\W', index, regexp=True, stopindex='%s lineend' % index)
         index1 = '%s linestart' % index if not index1 else '%s +1c' % index1
         index2 = '%s lineend' % index if not index2 else index2
         return index1, index2
 
-    def select_seq(self, index='insert'):
-        """
-        Select the closest sequence of non blank characters from the cursor.
-        """
-
-        index1, index2 = self.get_seq_range(index)
-        self.tag_add('sel', index1, index2)
-
-    def get_seq_range(self, index):
+    def get_seq_range(self, index='insert'):
         index1 = self.search(' ', index, regexp=True, stopindex='%s linestart' %index, backwards=True)
         index2 = self.search(' ', index, regexp=True, stopindex='%s lineend' % index)
         index1 = '%s linestart' % index if not index1 else '%s +1c' % index1
         index2=  '%s lineend' % index if not index2 else index2
         return index1, index2
 
-    def get_word(self, index='insert'):
-        return self.get(*self.get_word_range(index))
-
-    def get_seq(self, index='insert'):
-
-        return self.get(*self.get_seq_range(index))
-
     def get_line(self, index='insert'):
         return self.get('%s linestart' % index, 
         '%s lineend' % index)
 
-    def scroll_line_up(self):
-        """
-        It scrolls one line up
-        """
-        # should be rewritten.
-        # it fails with append.
-        self.yview(SCROLL, -1, 'units')
-        is_visible = self.dlineinfo('insert')
-        if not is_visible:
-            self.mark_set('insert', 'insert -1l')
-    
-    def scroll_line_down(self):
-        """
-        It scrolls one line down.
-        """
-        # should be rewritten.
-        # it fails with append.
-
-        self.yview(SCROLL, 1, 'units')
-        is_visible = self.dlineinfo('insert')
-        if not is_visible:
-            self.mark_set('insert', 'insert +1l')
-    
-
-    def scroll_page_down(self):
-        """
-        It scrolls one page down.
-        """
-        self.yview(SCROLL, 1, 'page')
-        self.mark_set('insert', '@0,0')
-
-
-    def scroll_page_up(self):
-        """
-        It scrolls one page up.
-        """
-
-        self.yview(SCROLL, -1, 'page')
-        self.mark_set('insert', '@0,0')
-    
-    def insert_line_down(self):
-        """
-        It inserts one line down from the cursor position.
-        """
-
-        self.edit_separator()
-        self.insert('insert +1l linestart', '\n')
-        self.mark_set('insert', 'insert +1l linestart')
-        self.see('insert')
-    
-    def select_all(self):
-        """
-        It selects all text.
-        """
-
-        self.tag_add('sel', '1.0', 'end')
-
-    def insert_line_up(self):
-        """
-        It inserts one line up.
-        """
-
-        self.edit_separator()
-        self.insert('insert linestart', '\n')
-        self.mark_set('insert', 'insert -1l linestart')
-        self.see('insert')
-
-
-    def shift_sel_right(self, width, char):
-        """
-        Shift ranges of selected text to the right.
-        """
-        srow, scol = self.indref('sel.first')
-        erow, ecol = self.indref('sel.last')
-        self.shift_right(srow, erow, width, char)
-    
-    def shift_sel_left(self, width):
-        """
-        Shift ranges of selected text to the left.
-        """
-
-        srow, scol = self.indref('sel.first')
-        erow, ecol = self.indref('sel.last')
-        self.shift_left(srow, erow, width)
-    
-    def shift_right(self, srow, erow, width, char):
+    def shift_right(self, srow, erow, width, char=' '):
         """
         Given a start row and a end row it shifts
         a block of text to the right.
@@ -1057,23 +538,25 @@ class AreaVi(Text, DataEvent, IdleEvent):
             for indj in seq: 
                 yield indj
 
-    def replace_ranges(self, name, regex, data, *args, **kwargs):
+    def replace_ranges(self, name, regex, data, forwards=None, backwards=False,
+        exact=False, regexp=True, nocase=False, elide=False, nolinestop=False):
+
         """
         It replaces all occurrences of regex in the ranges that are mapped to tag name.
 
         name     - Name of the tag.
         regex    - The pattern.
         data     - The data to replace.
-        args     - Arguments given to AreaVi.find.
-        **kwargs - A dictionary of arguments given to AreaVi.find.
         """
 
-        ranges = self.tag_ranges(name)
-        for ind in range(0, len(ranges) - 1, 2):
-            self.replace_all(regex, data, 
-                ranges[ind], ranges[ind + 1], *args, **kwargs)
+        while True:
+            map = self.tag_nextrange(name, '1.0', 'end')
+            if not map: break
+            self.tag_remove(name, *map)
+            self.replace_all(regex, data, map[0], map[1], 
+                    exact, regexp, nocase, elide, nolinestop)
 
-    def map_matches(self, name, matches):
+    def select_matches(self, name, matches):
         """"
         It adds a tag to the match ranges from either AreaVi.find or
         AreaVi.collect.
@@ -1136,7 +619,6 @@ class AreaVi(Text, DataEvent, IdleEvent):
             nolinestop=nolinestop)
 
             if not match: break
-
             index = '%s%s' % (match[2], step)
 
             # If the two positions are equal it means
@@ -1149,18 +631,14 @@ class AreaVi(Text, DataEvent, IdleEvent):
 
     def isearch(self, pattern, *args, **kwargs):
         """
-        Improved search, in the sense it return the matched chunk
+        Just search shortcut, in the sense it return the matched chunk
         the initial position and the end position.
         """
         count = IntVar()
-
         index = self.search(pattern, *args, count=count, **kwargs)
+        if not index: return 
 
-        if not index:
-            return 
-
-        len = count.get()
-
+        len   = count.get()
         tmp   = '%s +%sc' % (index, len)
         chunk = self.get(index, tmp)
 
@@ -1194,29 +672,9 @@ class AreaVi(Text, DataEvent, IdleEvent):
     
         return str(self.tk.call(tuple(args)))
 
-    def iseek(self, regex, index='insert', stopindex='end', backwards=None, exact=None, regexp=True,
-                        nocase=None, elide=None, nolinestop=None):
-        """
-        Find regex backwards/fowards from index position and changes insert
-        mark to the prev/next match.
-        """
-
-        count = IntVar()
-
-        index = self.search(regex, index=index, stopindex=stopindex, regexp=regexp, 
-        exact=exact, nocase=nocase, elide=elide, nolinestop=nolinestop, 
-        backwards=backwards, count=count)
-
-        if not index: return
-
-        index0 = self.index('%s +%sc' % (index, count.get())) 
-        self.mark_set('insert', index if backwards else index0)
-        self.see('insert')
-
-        return index, index0
-
-    def ipick(self, name, regex, index='insert', stopindex='end', verbose=False, backwards=None, exact=None, regexp=True,
-                        nocase=None, elide=None, nolinestop=None):
+    def ipick(self, name, regex, index='insert', stopindex='end', 
+        verbose=False, backwards=None, exact=None, regexp=True, 
+        nocase=None, elide=None, nolinestop=None):
 
         """
         """
@@ -1230,16 +688,19 @@ class AreaVi(Text, DataEvent, IdleEvent):
         if ranges: index0, index1 = ranges[:2]
         else: index0 = index1 = index
 
-        index = self.iseek(regex, index=index0 if backwards else index1, stopindex=stopindex,
-        backwards=backwards, exact=exact, regexp=regexp, nocase=nocase, 
-        elide=elide, nolinestop=nolinestop)
+        index = self.isearch(regex, index=index0 if backwards else index1, 
+        stopindex=stopindex, backwards=backwards, exact=exact, regexp=regexp, 
+        nocase=nocase, elide=elide, nolinestop=nolinestop)
 
-        if not index:
-            return
+        if not index: return
+        _, start, end = index
+
+        self.mark_set('insert', start if backwards else end)
+        self.see('insert')
 
         self.tag_remove(name, '1.0', 'end')
-        self.tag_add(name, *index)
-        return index
+        self.tag_add(name, start, end)
+        return start, end
 
     def replace(self, regex, data, index=None, stopindex=None,  
         forwards=None, backwards=None, exact=None, regexp=True, 
@@ -1247,12 +708,19 @@ class AreaVi(Text, DataEvent, IdleEvent):
 
         """
         It is used to replace occurrences of a given match.
-
         It is possible to use a callback function to return what is replaced 
         as well.
 
-        Obs: If the replacement cant be performed anymore it just returns None.
+        If the replacement cant be performed anymore it just returns None otherwise
+        it returns the index and length of the replacement.
+
+        Like:
+        index, length
+
         """
+        if not regex: 
+            raise TypeError('Regex should be non blank!')
+
         tmp = index
         count = IntVar()
 
@@ -1264,15 +732,13 @@ class AreaVi(Text, DataEvent, IdleEvent):
 
         index0 = self.index('%s +%sc' % (index, count.get()))
 
-        # if self.compare(index, '>=', index0): return
-
         if callable(data): 
             data = data(self.get(index, index0), index, index0)
 
         self.delete(index, index0)
         self.insert(index, data)
         
-        # Does the replacement then if it cant be done anymore it returns None.
+        # Does the replacement then if it can't be done anymore it returns None.
         if self.compare(index0, '>=', 'end'): return
 
         return index, len(data)
@@ -1285,15 +751,13 @@ class AreaVi(Text, DataEvent, IdleEvent):
         It accepts a callback function that determines what is replaced.
         """
 
-        # It is needed because the range will grow
-        # when data is inserted, the intent is searching
-        # over a pre defined range.
+        # It avoids overlapping of replacements.
         self.mark_set('(REP_STOPINDEX)', stopindex)
 
         while True:
-            map = self.replace(regex, data, index, '(REP_STOPINDEX)', 
-            exact=exact, nocase=nocase, nolinestop=nolinestop, 
-                regexp=regexp, elide=elide)
+            map = self.replace(regex, data, index, 
+                '(REP_STOPINDEX)', exact=exact, nocase=nocase, 
+                    nolinestop=nolinestop, regexp=regexp, elide=elide)
 
             if not map: 
                 return self.index('(REP_STOPINDEX)')
@@ -1327,50 +791,6 @@ class AreaVi(Text, DataEvent, IdleEvent):
         else:
             return None
 
-    def sel_matching_pair_data(self, index, max=1500, pair=('(', ')')):
-        index = self.case_pair(index, max, *pair)
-        if not index: return
-
-        min = self.min(index, 'insert')
-        max = self.max(index, 'insert')
-        min = '%s +1c' % min
-
-        self.tag_add('sel', min, max)
-
-    def sel_matching_pair(self, index, max=1500, pair=('(', ')')):
-        """
-        """
-        index = self.case_pair(index, max, *pair)
-        if not index: return
-
-        min = self.min(index, 'insert')
-        max = self.max(index, 'insert')
-        max = '%s +1c' % max
-
-        self.tag_add('sel', min, max)
-
-    def get_matching_pair(self, index, max, start='(', end=')'):
-        """
-        """
-
-        index0 = self.search(start, regexp=False, index=index, backwards=True)
-        if not index0: return
-
-        index1 = self.search(end, regexp=False, index=index)
-        if not index1: return
-
-
-        index2 = self.case_pair(index0, max, start, end)
-        if not index2: return
-
-        index3 = self.case_pair(index1, max, start, end)
-        if not index3: return
-
-        if self.is_in_range(index, index0, index2):
-            return index0, index2
-        elif self.is_in_range(index, index3, index1):
-            return index3, index1
-        
     def case_pair(self, index, max, start='(', end=')'):
         """
         Once this method is called, it returns an index for the next
@@ -1393,9 +813,9 @@ class AreaVi(Text, DataEvent, IdleEvent):
         size  = IntVar(0)
 
         while True:
-            index0 = self.search('\%s|\%s' % (start, end), index = index0,
-                                     stopindex = '%s %s%sc' % (index, sign, max), 
-                                     count = size, backwards = dir, regexp = True) 
+            index0 = self.search('\%s|\%s' % (start, end), 
+            index = index0, stopindex = '%s %s%sc' % (index, sign, max), 
+            count = size, backwards = dir, regexp = True) 
 
             if not index0: return ''
 
@@ -1442,6 +862,9 @@ class AreaVi(Text, DataEvent, IdleEvent):
         self.delete('1.0', 'end')
         self.insert('1.0', data)
         self.event_generate('<<LoadData>>')
+        self.mark_set('insert', '1.0')
+        self.see('insert')
+
         _, extension = os.path.splitext(self.filename)
         self.event_generate('<<Load/*%s>>' % extension)
 
@@ -1539,13 +962,6 @@ class AreaVi(Text, DataEvent, IdleEvent):
             range = self.tag_nextrange(name, index0, index1)
             if not range: break
             self.swap(data, *range)
-
-    def delete_ranges(self, name, index0='1.0', index1='end'):
-        """
-        It deletes ranges of text that are mapped to tag name between index0 and index1.
-        """
-
-        self.swap_ranges(name, '', index0, index1)
 
     def join_ranges(self, name, sep=''):
         """     
@@ -1652,22 +1068,6 @@ class AreaVi(Text, DataEvent, IdleEvent):
             for indj in it:
                 yield indi, indj
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

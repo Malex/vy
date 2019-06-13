@@ -72,6 +72,10 @@ Built-in Features
 
 - **Find Function/Class Definition**
 
+- **Python Vulture Integration**
+
+- **Python Pyflakes Integration**
+
 Plugins/Extensions
 ==================
 
@@ -80,10 +84,6 @@ Plugins/Extensions
 - **Javascript Auto Completion**
 
 - **Ruby Auto Completion**
-
-- **Python Vulture Integration**
-
-- **Python Pyflakes Integration**
 
 - **HTML Tidy Integration**
 
@@ -124,6 +124,15 @@ Support
 **Address:** irc.freenode.org
 
 **Channel:** #vy
+
+Donnors
+=======
+
+christian Chapman (i.am.christian.chapman@gmail.com) 
+
+I thank Christian too much for his help. It will keep vy work for a long long time.
+
+
 
 
 

@@ -37,9 +37,9 @@ class PanedHorizontalWindow(PanedWindow):
         self.add(frame)
 
         def save_focus(event):
-            self.master.last_focused_area = area
+            self.master.focused_area = area
 
-        self.master.last_focused_area = area
+        self.master.focused_area = area
         area.bind('<FocusIn>', save_focus)
         return area
 
@@ -61,7 +61,7 @@ class PanedVerticalWindow(PanedWindow):
 
     def __init__(self, *args, **kwargs):
         PanedWindow.__init__(self, orient=VERTICAL, *args, **kwargs)
-        self.last_focused_area = None
+        self.focused_area = None
 
     def create(self, filename='none'):
         """
@@ -140,40 +140,24 @@ class NoteVi(Notebook):
             for indj in indi:
                 base.load(*indj)
 
-    def switch_next(self, data, jump=False):
-        """
-        """
-
-        seq  = self.next(lambda text: data in text, jump)
-        elem = next(seq)
-        self.on(elem)
-
-    def switch_back(self, data, jump=False):
-        """
-        """
-
-        seq  = self.back(lambda text: data in text, jump)
-        elem = next(seq)
-        self.on(elem)
-
-    def next(self, func, jump=False):
+    def next(self, func):
         """
         """
 
         tabs  = self.tabs()
         index = self.index(self.select())
 
-        for ind in tabs[index + 1 if jump else 0:]:
+        for ind in tabs[index + 1:]:
             if func(self.tab(ind, 'text')): 
                 yield ind
     
-    def back(self, func, jump=False):
+    def back(self, func):
         """
         """
 
         tabs  = self.tabs()
         index = self.index(self.select())
-        tabs  = tabs[:index + (0 if jump else 1)]
+        tabs  = tabs[:index]
 
         for ind in reversed(tabs):
             if func(self.tab(ind, 'text')): 
@@ -186,11 +170,11 @@ class NoteVi(Notebook):
 
     def set_area_focus(self):
         wid  = self.nametowidget(self.select())
-        wid.last_focused_area.focus_set()
+        wid.focused_area.focus_set()
 
     def restore_area_focus(self):
         """
-        When an AreaVvi is destroyed, the last_focused_area
+        When an AreaVi is destroyed, the focused_area
         is a dead widget, so it gives focus to the first AreaVi
         in the active tab.
         """
@@ -210,11 +194,6 @@ class NoteVi(Notebook):
         wid=self.focus_get()
         self.select(*args)
         self.after(30, lambda : wid.focus_set())
-
-
-
-
-
 
 
 
